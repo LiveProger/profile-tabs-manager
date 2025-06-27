@@ -1,13 +1,13 @@
 {
   "name": "com.example.chrome_profile_host",
   "description": "Native messaging host for Chrome profile switching",
-  "path": "C:\\Program Files\\nodejs\\node.exe",
+  "path": "node.exe",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://nllmmklggnnmjmcijlfdndcjiiacfikb/"
   ],
   "arguments": [
-    "C:\\Users\\User\\Desktop\\profile-tabs-manager\\server.js",
+    "server.js",
     "--native-messaging"
   ]
 }
