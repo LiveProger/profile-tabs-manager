@@ -112,6 +112,31 @@ async function getProfileNames() {
       };
     }
 
+    // Clean up duplicate profiles in the database
+    const profiles = await new Promise((resolve, reject) => {
+      db.all("SELECT profileId, profileDir FROM Profiles", (err, rows) => {
+        err ? reject(err) : resolve(rows);
+      });
+    });
+    const seenProfileDirs = new Set();
+    for (const profile of profiles) {
+      if (seenProfileDirs.has(profile.profileDir)) {
+        console.log(`Removing duplicate profile: ${profile.profileId} for profileDir: ${profile.profileDir}`);
+        await new Promise((resolve, reject) => {
+          db.run("DELETE FROM Profiles WHERE profileId = ?", [profile.profileId], (err) => {
+            err ? reject(err) : resolve();
+          });
+        });
+        await new Promise((resolve, reject) => {
+          db.run("DELETE FROM Tabs WHERE profileId = ?", [profile.profileId], (err) => {
+            err ? reject(err) : resolve();
+          });
+        });
+      } else {
+        seenProfileDirs.add(profile.profileDir);
+      }
+    }
+
     profileInfoCache = normalizedCache;
     lastCacheTime = now;
     console.log("Updated profile cache with", Object.keys(normalizedCache).length, "profiles");
@@ -191,15 +216,20 @@ app.get("/profiles", async (req, res) => {
   });
 });
 
-app.post("/profiles", (req, res) => {
+app.post("/profiles", async (req, res) => {
   const { profileId, profileName, tabs } = req.body;
   if (!profileId || !profileName) {
     return res.status(400).json({ error: "Missing profileId or profileName" });
   }
 
+  // Get the correct profileDir from getProfileNames
+  const profileNames = await getProfileNames();
+  const profile = Object.values(profileNames).find((p) => p.profileId === profileId.toLowerCase());
+  const profileDir = profile?.profileDir || profileName.toLowerCase();
+
   db.run(
     `INSERT OR REPLACE INTO Profiles (profileId, profileName, profileDir, userId) VALUES (?, ?, ?, ?)`,
-    [profileId.toLowerCase(), profileName, profileName.toLowerCase(), profileId],
+    [profileId.toLowerCase(), profileName, profileDir, profileId.toLowerCase()],
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
       db.run(`DELETE FROM Tabs WHERE profileId = ?`, [profileId.toLowerCase()], (err) => {
@@ -230,6 +260,79 @@ app.post("/profiles", (req, res) => {
       });
     }
   );
+});
+
+app.delete("/profile", async (req, res) => {
+  const { profileId } = req.body;
+  if (!profileId) return res.status(400).json({ error: "Missing profileId" });
+
+  try {
+    // Check if profile exists
+    const profile = await new Promise((resolve, reject) => {
+      db.get("SELECT * FROM Profiles WHERE profileId = ?", [profileId.toLowerCase()], (err, row) => {
+        err ? reject(err) : resolve(row);
+      });
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    // Fetch saved pages associated with the profile's tabs
+    const tabs = await new Promise((resolve, reject) => {
+      db.all("SELECT url FROM Tabs WHERE profileId = ?", [profileId.toLowerCase()], (err, rows) => {
+        err ? reject(err) : resolve(rows);
+      });
+    });
+
+    const savedPages = await new Promise((resolve, reject) => {
+      db.all("SELECT id, filePath FROM SavedPages WHERE url IN (SELECT url FROM Tabs WHERE profileId = ?)", 
+        [profileId.toLowerCase()], (err, rows) => {
+          err ? reject(err) : resolve(rows);
+        });
+    });
+
+    // Delete saved page files
+    for (const page of savedPages) {
+      try {
+        const filePath = page.filePath.replace("file://", "");
+        await fs.access(filePath);
+        await fs.unlink(filePath);
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          console.error(`Failed to delete file ${page.filePath}:`, error.message);
+        }
+      }
+    }
+
+    // Delete from database
+    await new Promise((resolve, reject) => {
+      db.run("DELETE FROM SavedPages WHERE url IN (SELECT url FROM Tabs WHERE profileId = ?)", 
+        [profileId.toLowerCase()], (err) => {
+          err ? reject(err) : resolve();
+        });
+    });
+
+    await new Promise((resolve, reject) => {
+      db.run("DELETE FROM Tabs WHERE profileId = ?", [profileId.toLowerCase()], (err) => {
+        err ? reject(err) : resolve();
+      });
+    });
+
+    await new Promise((resolve, reject) => {
+      db.run("DELETE FROM Profiles WHERE profileId = ?", [profileId.toLowerCase()], (err) => {
+        err ? reject(err) : resolve();
+      });
+    });
+
+    // Invalidate cache
+    profileInfoCache = null;
+    lastCacheTime = 0;
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.post("/save-page", async (req, res) => {
