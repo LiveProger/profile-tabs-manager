@@ -1,17 +1,24 @@
 {
   "name": "profile-tabs-manager",
   "version": "1.0.0",
-  "description": "",
+  "description": "Native messaging host for Chrome profile switching and tab management",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "pkg server.js --targets node18-win-x64 --output dist/profile-tabs-manager"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "sqlite3": "^5.1.7",
     "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "pkg": "^5.8.1"
   }
 }

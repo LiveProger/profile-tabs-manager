@@ -4,6 +4,7 @@ const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
 const { spawn } = require("child_process");
 const { v4: uuidv4 } = require("uuid");
+require("dotenv").config(); // Загрузка переменных окружения
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -25,7 +26,7 @@ const CACHE_DURATION = 5 * 60 * 1000;
 
 const db = new sqlite3.Database("profiles.db", (err) => {
   if (err) {
-    console.error("Database connection error:", err);
+    console.error("Ошибка подключения к базе данных:", err);
     process.exit(1);
   }
 });
@@ -101,7 +102,7 @@ async function getProfileNames() {
         `INSERT OR IGNORE INTO Profiles (profileId, profileName, profileDir, userId) VALUES (?, ?, ?, ?)`,
         [profileId, value.name || `Profile ${profileDir}`, profileDirLower, value.user_email || "unknown"],
         (err) => {
-          if (err) console.error(`Error adding profile ${profileDir}:`, err);
+          if (err) console.error(`Ошибка добавления профиля ${profileDir}:`, err);
         }
       );
       normalizedCache[profileDirLower] = {
@@ -112,7 +113,6 @@ async function getProfileNames() {
       };
     }
 
-    // Clean up duplicate profiles in the database
     const profiles = await new Promise((resolve, reject) => {
       db.all("SELECT profileId, profileDir FROM Profiles", (err, rows) => {
         err ? reject(err) : resolve(rows);
@@ -121,7 +121,7 @@ async function getProfileNames() {
     const seenProfileDirs = new Set();
     for (const profile of profiles) {
       if (seenProfileDirs.has(profile.profileDir)) {
-        console.log(`Removing duplicate profile: ${profile.profileId} for profileDir: ${profile.profileDir}`);
+        console.log(`Удаление дублирующего профиля: ${profile.profileId} для profileDir: ${profile.profileDir}`);
         await new Promise((resolve, reject) => {
           db.run("DELETE FROM Profiles WHERE profileId = ?", [profile.profileId], (err) => {
             err ? reject(err) : resolve();
@@ -139,10 +139,10 @@ async function getProfileNames() {
 
     profileInfoCache = normalizedCache;
     lastCacheTime = now;
-    console.log("Updated profile cache with", Object.keys(normalizedCache).length, "profiles");
+    console.log("Обновлён кэш профилей с", Object.keys(normalizedCache).length, "профилями");
     return profileInfoCache;
   } catch (error) {
-    console.error("Error reading Local State:", error.message);
+    console.error("Ошибка чтения Local State:", error.message);
     return profileInfoCache || {};
   }
 }
@@ -150,10 +150,10 @@ async function getProfileNames() {
 app.get("/profile-name", async (req, res) => {
   try {
     const profileId = req.query.profileId?.toLowerCase();
-    if (!profileId) return res.status(400).json({ error: "Missing profileId" });
+    if (!profileId) return res.status(400).json({ error: "Отсутствует profileId" });
     const profileNames = await getProfileNames();
     const profile = Object.values(profileNames).find((p) => p.profileId === profileId);
-    res.json({ profileName: profile?.name || "Unknown Profile" });
+    res.json({ profileName: profile?.name || "Неизвестный профиль" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -219,10 +219,9 @@ app.get("/profiles", async (req, res) => {
 app.post("/profiles", async (req, res) => {
   const { profileId, profileName, tabs } = req.body;
   if (!profileId || !profileName) {
-    return res.status(400).json({ error: "Missing profileId or profileName" });
+    return res.status(400).json({ error: "Отсутствует profileId или profileName" });
   }
 
-  // Get the correct profileDir from getProfileNames
   const profileNames = await getProfileNames();
   const profile = Object.values(profileNames).find((p) => p.profileId === profileId.toLowerCase());
   const profileDir = profile?.profileDir || profileName.toLowerCase();
@@ -264,10 +263,9 @@ app.post("/profiles", async (req, res) => {
 
 app.delete("/profile", async (req, res) => {
   const { profileId } = req.body;
-  if (!profileId) return res.status(400).json({ error: "Missing profileId" });
+  if (!profileId) return res.status(400).json({ error: "Отсутствует profileId" });
 
   try {
-    // Check if profile exists
     const profile = await new Promise((resolve, reject) => {
       db.get("SELECT * FROM Profiles WHERE profileId = ?", [profileId.toLowerCase()], (err, row) => {
         err ? reject(err) : resolve(row);
@@ -275,10 +273,9 @@ app.delete("/profile", async (req, res) => {
     });
 
     if (!profile) {
-      return res.status(404).json({ error: "Profile not found" });
+      return res.status(404).json({ error: "Профиль не найден" });
     }
 
-    // Fetch saved pages associated with the profile's tabs
     const tabs = await new Promise((resolve, reject) => {
       db.all("SELECT url FROM Tabs WHERE profileId = ?", [profileId.toLowerCase()], (err, rows) => {
         err ? reject(err) : resolve(rows);
@@ -292,7 +289,6 @@ app.delete("/profile", async (req, res) => {
         });
     });
 
-    // Delete saved page files
     for (const page of savedPages) {
       try {
         const filePath = page.filePath.replace("file://", "");
@@ -300,12 +296,11 @@ app.delete("/profile", async (req, res) => {
         await fs.unlink(filePath);
       } catch (error) {
         if (error.code !== "ENOENT") {
-          console.error(`Failed to delete file ${page.filePath}:`, error.message);
+          console.error(`Не удалось удалить файл ${page.filePath}:`, error.message);
         }
       }
     }
 
-    // Delete from database
     await new Promise((resolve, reject) => {
       db.run("DELETE FROM SavedPages WHERE url IN (SELECT url FROM Tabs WHERE profileId = ?)", 
         [profileId.toLowerCase()], (err) => {
@@ -325,7 +320,6 @@ app.delete("/profile", async (req, res) => {
       });
     });
 
-    // Invalidate cache
     profileInfoCache = null;
     lastCacheTime = 0;
 
@@ -338,7 +332,7 @@ app.delete("/profile", async (req, res) => {
 app.post("/save-page", async (req, res) => {
   const { url, title, mhtmlData, profileId } = req.body;
   if (!url || !title || !mhtmlData || !profileId) {
-    return res.status(400).json({ error: "Missing required fields" });
+    return res.status(400).json({ error: "Отсутствуют обязательные поля" });
   }
 
   const fileName = `saved_page_${Date.now()}.mhtml`;
@@ -363,7 +357,7 @@ app.post("/save-page", async (req, res) => {
       }
     );
   } catch (error) {
-    res.status(500).json({ error: `Failed to save page: ${error.message}` });
+    res.status(500).json({ error: `Не удалось сохранить страницу: ${error.message}` });
   }
 });
 
@@ -387,11 +381,11 @@ app.get("/saved-pages", async (req, res) => {
 
 app.delete("/saved-page", async (req, res) => {
   const { id } = req.body;
-  if (!id) return res.status(400).json({ error: "Missing id" });
+  if (!id) return res.status(400).json({ error: "Отсутствует id" });
 
   db.get("SELECT filePath FROM SavedPages WHERE id = ?", [id], async (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: "Page not found" });
+    if (!row) return res.status(404).json({ error: "Страница не найдена" });
 
     try {
       const filePath = row.filePath.replace("file://", "");
@@ -399,7 +393,7 @@ app.delete("/saved-page", async (req, res) => {
       await fs.unlink(filePath);
     } catch (error) {
       if (error.code !== "ENOENT") {
-        return res.status(500).json({ error: `Failed to delete file: ${error.message}` });
+        return res.status(500).json({ error: `Не удалось удалить файл: ${error.message}` });
       }
     }
 
@@ -422,7 +416,7 @@ if (process.argv.includes("--native-messaging")) {
     try {
       const { url, profileId } = JSON.parse(message.toString());
       if (!url || !profileId) {
-        process.stdout.write(Buffer.from(JSON.stringify({ error: "Missing url or profileId" })));
+        process.stdout.write(Buffer.from(JSON.stringify({ error: "Отсутствует url или profileId" })));
         return;
       }
 
@@ -444,7 +438,7 @@ if (process.argv.includes("--native-messaging")) {
           })
           .catch((err) => {
             process.stdout.write(
-              Buffer.from(JSON.stringify({ error: `Chrome executable not found: ${err.message}` }))
+              Buffer.from(JSON.stringify({ error: `Исполняемый файл Chrome не найден: ${err.message}` }))
             );
           });
       });
@@ -453,5 +447,8 @@ if (process.argv.includes("--native-messaging")) {
     }
   });
 } else {
-  app.listen(3000);
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => {
+    console.log(`Сервер запущен на порту ${port}`);
+  });
 }
