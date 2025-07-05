@@ -1,4 +1,4 @@
-Profile and Tabs Manager Server
+Profile and Tabs Manager Server (cheak reliz verions [reliz]https://github.com/LiveProger/profile-tabs-manager/releases/tag/reliz)
 Welcome to the server component of Profile and Tabs Manager, a Node.js server that powers a Chrome extension for managing Chrome profiles, tabs, and saving pages offline as MHTML files. The server uses Express, SQLite3, and native messaging to communicate with the Chrome extension. It supports a configurable port (default: 3000) and handles profile data storage and retrieval.
 Choose Your Language
 
