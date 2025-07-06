@@ -10,7 +10,7 @@
 
 ### 1. Скачайте сервер
 
-👉 [📦 Скачать с GitHub Releases](https://github.com/LiveProger/profile-tabs-manager/releases/tag/reliz)
+👉 [📦 Скачать с GitHub Releases](https://github.com/LiveProger/profile-tabs-manager/releases/tag/reliz1.0.1)
 
 Скачайте `.exe` — установка не требуется.
 
