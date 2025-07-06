@@ -4,6 +4,8 @@ const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
 const { spawn } = require("child_process");
 const { v4: uuidv4 } = require("uuid");
+const os = require("os");
+
 require("dotenv").config(); // Загрузка переменных окружения
 
 const app = express();
@@ -77,7 +79,7 @@ db.serialize(() => {
 });
 
 // Значение по умолчанию
-const DEFAULT_SAVE_PATH = path.join(__dirname, "SavedPages");
+const DEFAULT_SAVE_PATH = path.join(os.homedir(), "profile-tabs-saved");
 
 // Убедиться, что директория существует
 fs.mkdir(DEFAULT_SAVE_PATH, { recursive: true })
@@ -93,17 +95,27 @@ fs.mkdir(DEFAULT_SAVE_PATH, { recursive: true })
           `INSERT INTO Settings (key, value) VALUES (?, ?)`,
           ["savePath", DEFAULT_SAVE_PATH],
           (err) => {
-            if (err) console.error("Ошибка при установке пути по умолчанию:", err.message);
-            else console.log("Путь сохранения по умолчанию установлен:", DEFAULT_SAVE_PATH);
+            if (err)
+              console.error(
+                "Ошибка при установке пути по умолчанию:",
+                err.message
+              );
+            else
+              console.log(
+                "Путь сохранения по умолчанию установлен:",
+                DEFAULT_SAVE_PATH
+              );
           }
         );
       }
     });
   })
   .catch((err) => {
-    console.error("Ошибка при создании папки сохранения по умолчанию:", err.message);
+    console.error(
+      "Ошибка при создании папки сохранения по умолчанию:",
+      err.message
+    );
   });
-
 
 async function getProfileNames() {
   const now = Date.now();
@@ -452,7 +464,10 @@ app.post("/save-page", async (req, res) => {
   const fileName = `saved_page_${Date.now()}.mhtml`;
   const saveDir = await new Promise((resolve) => {
     db.get("SELECT value FROM Settings WHERE key = 'savePath'", (err, row) => {
-      const defaultPath = path.join(__dirname, "SavedPages");
+      const defaultPath = path.join(
+        row?.value || DEFAULT_SAVE_PATH,
+        "SavedPages"
+      );
       resolve(row?.value || defaultPath);
     });
   });
@@ -491,52 +506,108 @@ app.post("/save-page", async (req, res) => {
 });
 
 app.get("/saved-pages", async (req, res) => {
-  db.all("SELECT * FROM SavedPages", async (err, pages) => {
-    if (err) return res.status(500).json({ error: err.message });
-    const validPages = [];
-    for (const page of pages) {
-      try {
-        await fs.access(page.filePath.replace("file://", ""));
-        validPages.push(page);
-      } catch (error) {
-        if (error.code === "ENOENT") {
-          db.run("DELETE FROM SavedPages WHERE id = ?", [page.id]);
+  try {
+    // Получить путь сохранения
+    const savePath = await new Promise((resolve) => {
+      db.get(
+        "SELECT value FROM Settings WHERE key = 'savePath'",
+        (err, row) => {
+          const fallback = path.join(
+            row?.value || DEFAULT_SAVE_PATH,
+            "SavedPages"
+          );
+          resolve(row?.value || fallback);
+        }
+      );
+    });
+
+    // Прочитать все файлы в папке
+    const files = await fs.readdir(savePath);
+    const allMhtmlFiles = files.filter((f) => f.endsWith(".mhtml"));
+
+    // Получить записи из БД
+    const dbPages = await new Promise((resolve, reject) => {
+      db.all("SELECT * FROM SavedPages", (err, rows) => {
+        err ? reject(err) : resolve(rows);
+      });
+    });
+
+    // Получить ID-файлы из БД
+    const knownFileNames = new Set(dbPages.map((p) => p.fileName));
+
+    // Добавить "сиротские" страницы
+    const orphanPages = [];
+    for (const fileName of allMhtmlFiles) {
+      if (!knownFileNames.has(fileName)) {
+        const fullPath = path.join(savePath, fileName);
+        try {
+          await fs.access(fullPath); // только существующие
+          orphanPages.push({
+            id: `orphan-${fileName}`,
+            fileName,
+            filePath: `file://${fullPath.replace(/\\/g, "/")}`,
+            profileId: null,
+            title: "Unknown Title",
+            url: null,
+            timestamp: null,
+            isOrphan: true, 
+          });
+        } catch (e) {
+          // пропустить
         }
       }
     }
-    res.json(validPages);
-  });
+
+    const combinedPages = [...dbPages, ...orphanPages];
+    res.json(combinedPages);
+  } catch (error) {
+    console.error("Failed to load saved pages:", error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.delete("/saved-page", async (req, res) => {
-  const { id } = req.body;
-  if (!id) return res.status(400).json({ error: "Отсутствует id" });
+  const { id, filePath } = req.body;
+  console.log(filePath);
 
-  db.get(
-    "SELECT filePath FROM SavedPages WHERE id = ?",
-    [id],
-    async (err, row) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (!row) return res.status(404).json({ error: "Страница не найдена" });
+  try {
+    let fullPath = null;
 
-      try {
-        const filePath = row.filePath.replace("file://", "");
-        await fs.access(filePath);
-        await fs.unlink(filePath);
-      } catch (error) {
-        if (error.code !== "ENOENT") {
-          return res
-            .status(500)
-            .json({ error: `Не удалось удалить файл: ${error.message}` });
-        }
-      }
-
-      db.run("DELETE FROM SavedPages WHERE id = ?", [id], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
+    if (id) {
+      // обычное удаление через БД
+      const row = await new Promise((resolve, reject) => {
+        db.get(
+          "SELECT filePath FROM SavedPages WHERE id = ?",
+          [id],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
       });
+
+      if (!row) return res.status(404).json({ error: "Страница не найдена" });
+      fullPath = row.filePath.replace("file://", "");
+
+      await new Promise((resolve, reject) => {
+        db.run("DELETE FROM SavedPages WHERE id = ?", [id], (err) => {
+          err ? reject(err) : resolve();
+        });
+      });
+    } else if (filePath && filePath.startsWith("file://")) {
+      fullPath = filePath.replace("file://", "");
+    } else {
+      return res.status(400).json({ error: "Нет ни ID, ни корректного пути" });
     }
-  );
+
+    await fs.unlink(fullPath);
+    return res.json({ success: true });
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return res.json({ success: true }); // файл уже удалён
+    }
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 app.get("/save-path", (req, res) => {
