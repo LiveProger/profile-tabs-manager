@@ -1,29 +1,46 @@
-Profile and Tabs Manager Server (cheak reliz verions [reliz]https://github.com/LiveProger/profile-tabs-manager/releases/tag/reliz)
-Welcome to the server component of Profile and Tabs Manager, a Node.js server that powers a Chrome extension for managing Chrome profiles, tabs, and saving pages offline as MHTML files. The server uses Express, SQLite3, and native messaging to communicate with the Chrome extension. It supports a configurable port (default: 3000) and handles profile data storage and retrieval.
-Choose Your Language
+# Profile and Tabs Manager – Server Component
 
-[English](README.en.md)
-[Русский](README.ru.md)
+Welcome! This is the server for the [Profile Tabs Manager Chrome Extension](https://chromewebstore.google.com/detail/profile-and-tabs-manager/edhaohmmppcambblkdnlecnakgfkgpln), which allows you to manage Chrome user profiles, view open tabs, and save pages offline as `.mhtml`.
 
-For detailed instructions on setting up, running, building, and troubleshooting the server, please select your preferred language above.
-Quick Start
+This server is required to use the extension.
 
-Clone the Repository:
-git clone https://github.com/LiveProger/profile-tabs-manager.git
-cd profile-tabs-manager
+---
 
+## 🚀 Quick Start
 
-Install Dependencies:
-npm install
+### 1. Download the Server
 
+Get the latest `.exe` release here:
 
-Set Up Environment Variables:Create a .env file in the project root:
-PORT=3000
+👉 [📦 Download from GitHub Releases](https://github.com/LiveProger/profile-tabs-manager/releases/tag/reliz)
 
+No installation required — just download and run.
 
-Run the Server:
-npm start
+### 2. Launch the Server
 
+Run the `.exe` file. It will start a background service on port `3000`.
 
+> ✅ No configuration or terminal needed.
 
-For more details, refer to the language-specific README files linked above.
+### 3. Install the Chrome Extension
+
+Get it from the Web Store:
+
+👉 [🧩 Profile Tabs Manager – Chrome Extension](https://chrome.google.com/webstore/detail/profile-tabs-manager/)
+
+### 4. Start Using It
+
+With the extension and server running, you can:
+
+- Switch and manage Chrome profiles
+- Save any open tab as an offline `.mhtml` file
+- Open or delete saved pages
+- Change the save folder for offline files
+
+---
+
+## 📘 More Information
+
+- [🇬🇧 English instructions for users and developers](README.en.md)
+- [🇷🇺 Русская инструкция для пользователей и разработчиков](README.ru.md)
+
