@@ -1,6 +1,6 @@
 # Profile and Tabs Manager – Server Component
 
-This is the backend server for the [Profile Tabs Manager Chrome Extension](https://chromewebstore.google.com/detail/profile-and-tabs-manager/edhaohmmppcambblkdnlecnakgfkgpln), which allows managing Chrome user profiles, viewing open tabs, and saving pages as `.mhtml` offline.
+This is the backend server for the [Profile Tabs Manager Chrome Extension](https://chrome.google.com/webstore/detail/profile-tabs-manager/), which allows you to manage Chrome profiles, view tabs, and save pages as `.mhtml` files offline.
 
 This server is required to use the extension.
 
@@ -12,11 +12,11 @@ This server is required to use the extension.
 
 👉 [📦 GitHub Releases](https://github.com/LiveProger/profile-tabs-manager/releases/tag/reliz)
 
-Download the `.exe` file — no install required.
+Download the `.exe` file — no installation is required.
 
 ### 2. Launch the Server
 
-Just run the `.exe`. It opens a background server on port `3000`. Nothing to configure.
+Run the `.exe` file. It will start a local server on port `3000`. No terminal or configuration needed.
 
 ### 3. Install the Extension
 
@@ -24,23 +24,23 @@ Just run the `.exe`. It opens a background server on port `3000`. Nothing to con
 
 ### 4. Use It
 
-With the server and extension running, you can:
+Once the extension and server are running, you can:
 
 - Switch and manage Chrome profiles
-- Save open pages offline as `.mhtml`
-- View or delete saved pages
-- Set a custom save folder for pages
+- Save pages offline as `.mhtml` files
+- View and delete saved pages
+- Set a custom folder for saved pages
 
 ---
 
-## 👨‍💻 Developer Instructions
+## 👨‍💻 Developer Guide
 
 ### Prerequisites
 
-- Node.js (v18+ recommended)
+- Node.js (v18 or higher recommended)
 - npm
 - Git
-- Google Chrome (with user profiles)
+- Google Chrome with profiles enabled
 - SQLite3
 
 ### Installation
@@ -49,3 +49,45 @@ With the server and extension running, you can:
 git clone https://github.com/LiveProger/profile-tabs-manager.git
 cd profile-tabs-manager
 npm install
+```
+
+Create `.env` file:
+
+```bash
+echo "PORT=3000" > .env
+```
+
+Run the server:
+
+```bash
+npm start
+```
+
+### Build Executable
+
+Install `pkg`:
+
+```bash
+npm install --save-dev pkg
+```
+
+Build the executable:
+
+```bash
+npm run build
+```
+
+The output will be in the `dist/` folder.
+
+### Scripts
+
+- `npm start` – run the server
+- `npm run dev` – run with hot-reload (nodemon)
+- `npm run build` – compile into `.exe`
+
+### Project Structure
+
+- `server.js` – main server logic
+- `SavedPages/` – folder where saved pages are stored
+- `profiles.db` – SQLite database file
+- `com.example.chrome_profile_host.json` – native messaging config for Chrome
