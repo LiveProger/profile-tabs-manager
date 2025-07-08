@@ -45,7 +45,8 @@ db.serialize(() => {
       profileId TEXT PRIMARY KEY,
       profileName TEXT NOT NULL,
       profileDir TEXT UNIQUE,
-      userId TEXT
+      userId TEXT,
+      isHidden INTEGER DEFAULT 0
     )
   `);
   db.run(`
@@ -241,15 +242,18 @@ app.get("/profiles", async (req, res) => {
     profileInfoCache = null;
     lastCacheTime = 0;
   }
+
+  const filter = req.query.filter === "active" ? "active" : "all";
   const profileNames = await getProfileNames();
   const currentProfileId = req.query.currentProfileId?.toLowerCase();
 
-  db.all("SELECT * FROM Profiles", async (err, profiles) => {
+  const whereClause = filter === "active" ? "WHERE isHidden = 0" : "";
+  db.all(`SELECT * FROM Profiles ${whereClause}`, async (err, profiles) => {
     if (err) return res.status(500).json({ error: err.message });
+
     const enrichedProfiles = profiles.map((profile) => ({
       ...profile,
-      profileName:
-        profileNames[profile.profileDir]?.name || profile.profileName,
+      profileName: profileNames[profile.profileDir]?.name || profile.profileName,
       isCurrent:
         currentProfileId &&
         profile.profileId.toLowerCase() === currentProfileId,
@@ -260,11 +264,13 @@ app.get("/profiles", async (req, res) => {
       "SELECT tabId AS id, profileId, title, url FROM Tabs",
       async (err, tabs) => {
         if (err) return res.status(500).json({ error: err.message });
+
         const savedPages = await new Promise((resolve, reject) => {
           db.all("SELECT * FROM SavedPages", (err, pages) => {
             err ? reject(err) : resolve(pages);
           });
         });
+
         const validSavedPages = [];
         for (const page of savedPages) {
           try {
@@ -296,6 +302,7 @@ app.get("/profiles", async (req, res) => {
                 })),
             }));
         });
+
         res.json(enrichedProfiles);
       }
     );
@@ -505,6 +512,49 @@ app.post("/save-page", async (req, res) => {
   }
 });
 
+
+app.post("/profile/visibility", (req, res) => {
+  const { profileId, isHidden } = req.body;
+  if (!profileId || typeof isHidden !== "boolean") {
+    return res.status(400).json({ error: "Неверный формат данных" });
+  }
+
+  db.run(
+    `UPDATE Profiles SET isHidden = ? WHERE profileId = ?`,
+    [isHidden ? 1 : 0, profileId.toLowerCase()],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
+app.get("/settings", (req, res) => {
+  db.all("SELECT * FROM Settings", (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const settings = {};
+    for (const row of rows) {
+      settings[row.key] = row.value;
+    }
+    res.json(settings);
+  });
+});
+
+app.post("/settings", (req, res) => {
+  const { key, value } = req.body;
+  if (!key) return res.status(400).json({ error: "Missing key" });
+
+  db.run(
+    `INSERT OR REPLACE INTO Settings (key, value) VALUES (?, ?)`,
+    [key, value],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
 app.get("/saved-pages", async (req, res) => {
   try {
     // Получить путь сохранения
@@ -550,7 +600,7 @@ app.get("/saved-pages", async (req, res) => {
             title: "Unknown Title",
             url: null,
             timestamp: null,
-            isOrphan: true, 
+            isOrphan: true,
           });
         } catch (e) {
           // пропустить
