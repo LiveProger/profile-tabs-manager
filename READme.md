@@ -12,7 +12,7 @@ This server is required to use the extension.
 
 Get the latest `.exe` release here:
 
-👉 [📦 Download from GitHub Releases](https://github.com/LiveProger/profile-tabs-manager/releases/tag/reliz1.0.1)
+👉 [📦 Download from GitHub Releases](https://github.com/LiveProger/profile-tabs-manager/releases)
 
 No installation required — just download and run.
 
